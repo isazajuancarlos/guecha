@@ -63,17 +63,22 @@ and ask — don't act and report after.
 
 ## Install
 
-Requires a Rust toolchain (for the one-time build). See
-[`docs/INSTALL.md`](docs/INSTALL.md) for the plugin-manager flow and platform
-notes.
+In Claude Code (2.1.275+), one step:
+
+```
+/plugin install guecha --marketplace isazajuancarlos/guecha
+```
+
+guecha is **source-first** — it expects a one-time local build so you never run
+an opaque binary from a security tool:
 
 ```bash
-git clone <this-repo> guecha && cd guecha
+git clone https://github.com/isazajuancarlos/guecha && cd guecha
 ./build.sh          # compiles, stages bin/, runs the benches
 ```
 
-Then add it as a Claude Code plugin (local marketplace or your own host — this
-repo is source-first by design; see below).
+See [`docs/INSTALL.md`](docs/INSTALL.md) for the plugin-manager flow, local
+marketplace setup, and platform notes.
 
 ## Why source-first, and why that is the point
 
