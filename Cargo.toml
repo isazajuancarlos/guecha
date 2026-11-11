@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Juan Carlos Isaza
+[workspace]
+resolver = "2"
+members = [
+    "crates/olfateador_ofuscacion",
+    "crates/mi_config_tras_leer_fuera",
+]
+
+# Dependencies optimized even in debug: cheap at birth, pays off the day a
+# heavy crate enters. Harmless for these two.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = "s"

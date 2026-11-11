@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Juan Carlos Isaza
+[package]
+name = "mi_config_tras_leer_fuera"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Juan Carlos Isaza"]
+description = "Layer-3 persistence guard: warns when the agent writes to its own durable config right after reading an external source."
+
+[dependencies]
+serde_json = "1"
+
+[lib]
+name = "mi_config_tras_leer_fuera"
+path = "src/lib.rs"
+
+[[bin]]
+name = "guecha-persistence"
+path = "src/main.rs"
+
+[[bin]]
+name = "probar"
+path = "src/bin/probar.rs"

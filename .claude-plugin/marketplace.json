@@ -1,0 +1,11 @@
+{
+  "name": "guecha",
+  "owner": { "name": "Juan Carlos Isaza" },
+  "plugins": [
+    {
+      "name": "guecha",
+      "source": "./",
+      "description": "Prompt-injection defense for AI coding agents: obfuscation sniffer + config persistence guard + origin-rule skill. Advisory, local, zero-telemetry."
+    }
+  ]
+}

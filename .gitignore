@@ -1,0 +1,8 @@
+/target
+**/target
+# Built binaries are staged by build.sh; ship them via signed releases, not the tree.
+/bin/guecha-obfuscation
+/bin/guecha-persistence
+# Cargo.lock IS committed on purpose: reproducible, auditable builds.
+.DS_Store
+conversaciones/

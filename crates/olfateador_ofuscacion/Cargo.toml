@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Juan Carlos Isaza
+[package]
+name = "olfateador_ofuscacion"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Juan Carlos Isaza"]
+description = "Obfuscation sniffer for AI-agent tool output: bidi/Trojan-Source, zero-width, space-flooding, image exfiltration."
+
+# serde_json is the only dependency: the hook payload is JSON and the \uXXXX
+# escapes must be decoded to see the real characters the model ends up reading.
+[dependencies]
+serde_json = "1"
+
+[lib]
+name = "olfateador_ofuscacion"
+path = "src/lib.rs"
+
+[[bin]]
+name = "guecha-obfuscation"
+path = "src/main.rs"
+
+[[bin]]
+name = "probar_olfateador"
+path = "src/bin/probar.rs"

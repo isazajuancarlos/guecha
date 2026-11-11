@@ -1,0 +1,13 @@
+guecha — prompt-injection defense for AI coding agents
+Copyright (c) 2026 Juan Carlos Isaza
+
+This product is licensed under the MIT License (see LICENSE).
+
+Third-party dependencies:
+  - serde_json (MIT OR Apache-2.0) — JSON parsing of hook payloads.
+
+The obfuscation detectors draw on publicly documented research into prompt
+injection via hidden characters and auto-rendered exfiltration channels
+(Trojan Source; NVIDIA/SkillSpector obfuscation studies; the "Embrace The Red"
+corpus on image-based exfiltration). No third-party code is vendored from those
+sources; only the threat taxonomy is referenced.

@@ -1,0 +1,19 @@
+{
+  "name": "guecha",
+  "version": "0.1.0",
+  "description": "Prompt-injection defense for AI coding agents: sniffs obfuscated instructions in tool output and guards the agent's own durable config against injection persistence. Advisory, local, zero-telemetry.",
+  "author": { "name": "Juan Carlos Isaza" },
+  "homepage": "https://github.com/REPLACE-ME/guecha",
+  "repository": "https://github.com/REPLACE-ME/guecha",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "prompt-injection",
+    "guardrail",
+    "hooks",
+    "agent-safety",
+    "trojan-source",
+    "exfiltration",
+    "defense"
+  ]
+}
