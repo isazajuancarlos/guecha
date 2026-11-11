@@ -228,7 +228,7 @@ pub fn detectar_exfil_imagen(texto: &str) -> Option<Hallazgo> {
             return Some(Hallazgo {
                 clase: "exfil-imagen",
                 detalle: format!(
-                    "imagen que pide un URL EXTERNO con datos en la cola → exfiltración al renderizar (host {host})"
+                    "image requesting an EXTERNAL URL with data in the tail → exfiltration on render (host {host})"
                 ),
             });
         }
@@ -320,7 +320,7 @@ pub fn detectar(texto: &str, ruta: Option<&str>) -> Vec<Hallazgo> {
         out.push(Hallazgo {
             clase: "entrada-truncada",
             detalle: format!(
-                "entrada grande (> {MAX_ESCANEO} bytes): escaneé cabeza y cola; el medio quedó sin revisar — trátala con sospecha"
+                "oversized input (> {MAX_ESCANEO} bytes): scanned head and tail; the middle was not reviewed — treat with suspicion"
             ),
         });
         recorte.as_str()
@@ -393,7 +393,7 @@ pub fn detectar(texto: &str, ruta: Option<&str>) -> Vec<Hallazgo> {
         out.push(Hallazgo {
             clase: "bidi",
             detalle: format!(
-                "{n_bidi} control(es) bidireccional(es) (Trojan Source), primero ~línea {linea_bidi}"
+                "{n_bidi} bidirectional control(s) (Trojan Source), first near line {linea_bidi}"
             ),
         });
     }
@@ -401,7 +401,7 @@ pub fn detectar(texto: &str, ruta: Option<&str>) -> Vec<Hallazgo> {
         out.push(Hallazgo {
             clase: "ancho-cero",
             detalle: format!(
-                "{n_inv} carácter(es) invisible(s) (incrustados en palabras o en run), primero ~línea {linea_inv}"
+                "{n_inv} invisible character(s) (embedded in words or in a run), first near line {linea_inv}"
             ),
         });
     }
@@ -409,7 +409,7 @@ pub fn detectar(texto: &str, ruta: Option<&str>) -> Vec<Hallazgo> {
         out.push(Hallazgo {
             clase: "tag-smuggling",
             detalle: format!(
-                "{n_tag} carácter(es) del bloque de Tags Unicode (ASCII smuggling invisible), primero ~línea {linea_tag}"
+                "{n_tag} character(s) from the Unicode Tags block (invisible ASCII smuggling), first near line {linea_tag}"
             ),
         });
     }
@@ -429,7 +429,7 @@ pub fn detectar(texto: &str, ruta: Option<&str>) -> Vec<Hallazgo> {
                         out.push(Hallazgo {
                             clase: "relleno-horizontal",
                             detalle: format!(
-                                "run de ≥{RUN_HORIZONTAL} espacios/tabs en línea {} (empuja texto fuera de la vista)",
+                                "run of ≥{RUN_HORIZONTAL} spaces/tabs on line {} (pushes text out of view)",
                                 n + 1
                             ),
                         });
@@ -454,7 +454,7 @@ pub fn detectar(texto: &str, ruta: Option<&str>) -> Vec<Hallazgo> {
             out.push(Hallazgo {
                 clase: "relleno-vertical",
                 detalle: format!(
-                    "{blancas_max} líneas en blanco seguidas desde ~línea {linea_v} (empuja texto fuera de la vista)"
+                    "{blancas_max} consecutive blank lines from ~line {linea_v} (pushes text out of view)"
                 ),
             });
         }
