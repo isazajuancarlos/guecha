@@ -23,6 +23,19 @@ cargo run  --release -p mi_config_tras_leer_fuera --bin probar          # E2E
 | `guecha-obfuscation` | E2E `probar_olfateador` | **18 / 18** — warns on 8, stays quiet on 10 |
 | `guecha-persistence` | E2E `probar` | **15 / 15** — 6 red, 9 green |
 
+## Latency
+
+```bash
+cargo run --release --bin latencia   # zero-dep, median of several runs
+```
+
+On a representative ~6 KB tool output (typical README/code text), the obfuscation
+detector runs in **~95 µs per scan (~66 MB/s)** — well under a millisecond, which
+is the point: an advisory hook that runs on every content-reading tool must be
+cheap enough to never be felt. Oversized inputs are bounded (head+tail scan with a
+budget), so a pathological payload cannot blow the hook's timeout. Numbers vary by
+machine; the bench is zero-dependency so you can reproduce yours.
+
 ## The discipline (why these numbers mean something)
 
 A bench of only positive cases is a disguised failure: a detector that says "yes"

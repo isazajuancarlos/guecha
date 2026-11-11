@@ -24,3 +24,7 @@ path = "src/main.rs"
 [[bin]]
 name = "probar_olfateador"
 path = "src/bin/probar.rs"
+
+[[bin]]
+name = "latencia"
+path = "src/bin/latencia.rs"

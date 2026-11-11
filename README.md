@@ -2,6 +2,11 @@
 
 # guecha
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/isazajuancarlos/guecha?sort=semver)](https://github.com/isazajuancarlos/guecha/releases)
+![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
+![Mode: advisory](https://img.shields.io/badge/mode-advisory-brightgreen.svg)
+
 **Prompt-injection defense for AI coding agents.** Two local hooks + one rule
 that catch the attacks a human reviewer can't see and the agent shouldn't obey.
 
