@@ -6,6 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/isazajuancarlos/guecha?sort=semver)](https://github.com/isazajuancarlos/guecha/releases)
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 ![Mode: advisory](https://img.shields.io/badge/mode-advisory-brightgreen.svg)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16580/badge)](https://www.bestpractices.dev/projects/16580)
 
 **Prompt-injection defense for AI coding agents.** Two local hooks + one rule
 that catch the attacks a human reviewer can't see and the agent shouldn't obey.
@@ -13,6 +14,8 @@ that catch the attacks a human reviewer can't see and the agent shouldn't obey.
 Advisory, local, zero-telemetry. No network, no account, one dependency. Built
 in Rust. Every detector ships with a measured pass/fail bench that proves it
 *discriminates* — it fires on the attack and stays quiet on legitimate content.
+
+![guecha in action](guecha.gif)
 
 > *Güecha* were the elite warriors of the Muisca people — the guardians.
 
