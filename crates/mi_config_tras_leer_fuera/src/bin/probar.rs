@@ -216,7 +216,42 @@ fn main() {
         fallos += 1;
     }
 
-    println!("\n15 casos, {fallos} fallos");
+    // ───── #6: evasión por SYMLINK — `atajo`→`.claude` esquivaba la huella ─────
+    // La normalización léxica resolvía `.`/`..` pero NO symlinks; `resuelve`
+    // canonicaliza el padre y lo cierra. Pareja roja/verde por la vía real.
+    #[cfg(unix)]
+    let casos_symlink = {
+        use std::os::unix::fs::symlink;
+        let atajo = home.join("atajo");
+        let _ = std::fs::remove_file(&atajo);
+        symlink(home.join(".claude"), &atajo).unwrap();
+        // ROJO: `{HOME}/atajo/CLAUDE.md` (symlink a .claude) DEBE avisar.
+        if !chequear(
+            &dir, &home, "rojo_symlink_a_claudemd",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/atajo/CLAUDE.md", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: symlink a un directorio NEUTRO (no config) NO debe avisar.
+        let neutro = std::env::temp_dir().join("guardian_neutro");
+        std::fs::create_dir_all(&neutro).unwrap();
+        let otro = home.join("otro");
+        let _ = std::fs::remove_file(&otro);
+        symlink(&neutro, &otro).unwrap();
+        if !chequear(
+            &dir, &home, "verde_symlink_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/otro/CLAUDE.md", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        2
+    };
+    #[cfg(not(unix))]
+    let casos_symlink = 0;
+
+    println!("\n{} casos, {fallos} fallos", 15 + casos_symlink);
     if fallos > 0 {
         std::process::exit(1);
     }

@@ -38,12 +38,34 @@ fn normaliza(p: &Path) -> PathBuf {
     out
 }
 
+/// Resuelve symlinks ADEMÁS de `.`/`..`. El archivo destino puede no existir aún
+/// (se está a punto de escribir), así que `canonicalize` sobre él fallaría; se
+/// canonicaliza el PADRE —que casi siempre existe— y se re-anexa el nombre. Sin
+/// padre canonicalizable cae a la normalización léxica (lado seguro, idéntico al
+/// comportamiento anterior). Cierra la evasión por symlink: escribir a
+/// `~/atajo/CLAUDE.md` con `atajo`→`.claude` ya no esquiva la huella de persistencia.
+fn resuelve(p: &Path) -> PathBuf {
+    let lex = normaliza(p);
+    match (lex.parent(), lex.file_name()) {
+        (Some(padre), Some(nombre)) if !padre.as_os_str().is_empty() => {
+            match std::fs::canonicalize(padre) {
+                Ok(real) => real.join(nombre),
+                Err(_) => lex,
+            }
+        }
+        _ => lex,
+    }
+}
+
 /// ¿Es config de ALTA POTENCIA? (se carga en cada sesión y su corrupción
 /// persiste). Las memorias quedan FUERA del v1 a propósito: se escriben a
 /// diario y su radio por archivo es menor (regla estrecha).
 pub fn es_config_protegida(ruta: &Path, home: &Path) -> bool {
-    let r = normaliza(ruta);
-    let base = home.join(".claude");
+    let r = resuelve(ruta);
+    // La base se canonicaliza también, para comparar la misma forma real en ambos
+    // lados (p. ej. `/var`→`/private/var`, o un `.claude` tras un home enlazado).
+    let base =
+        std::fs::canonicalize(home.join(".claude")).unwrap_or_else(|_| normaliza(&home.join(".claude")));
     for archivo in ["CLAUDE.md", "settings.json", "settings.local.json"] {
         if r == base.join(archivo) {
             return true;
