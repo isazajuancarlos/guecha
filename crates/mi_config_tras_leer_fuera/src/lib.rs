@@ -38,41 +38,63 @@ fn normaliza(p: &Path) -> PathBuf {
     out
 }
 
-/// Resuelve una ruta a su forma REAL para comparar: sigue los symlinks que un
-/// Write seguiría de verdad. El destino puede no existir aún (se está a punto de
-/// crear), así que no se puede canonicalizar siempre.
+/// Límite de saltos de symlink (el `ELOOP` del kernel Linux es 40): corta un
+/// ciclo `a`→`b`→`a` sin colgarse.
+const MAX_SALTOS: u32 = 40;
+
+/// Resuelve una ruta a la forma real que un Write seguiría, SIN exigir que exista
+/// (el destino se está a punto de crear). Camina los componentes desde la raíz
+/// como el kernel: sigue cada symlink —incluido uno COLGANTE, cuyo destino aún no
+/// existe— y aplica `..` sobre lo YA resuelto, no léxicamente.
 ///
-/// Si la ruta COMPLETA existe, `canonicalize` sigue los symlinks de todos los
-/// componentes, el ÚLTIMO incluido (`~/enlace`→`~/.claude/CLAUDE.md`). Si no
-/// existe, se sube al ancestro existente más largo, se canonicaliza ÉSE y se
-/// re-anexan los componentes restantes (ya sin `.`/`..`).
+/// Por qué no `canonicalize` ni un colapso léxico de `..` previo: `canonicalize`
+/// exige que la ruta exista (falla con un leaf colgante), y colapsar `..` antes de
+/// seguir symlinks abre un DIFERENCIAL DE PARSER —`enlace/..` NO es `.` si `enlace`
+/// apunta a otro sitio— por el que un write caía en la config real mientras el
+/// guard miraba otra ruta. Los dos huecos los cazó la revisión del commit previo.
 ///
-/// La clave es que se aplica IGUAL al destino y a las rutas protegidas, así la
-/// comparación es consistente por construcción: no hay un lado canónico y otro
-/// léxico (la causa de los tres hallazgos de la revisión). Sin ningún ancestro
-/// canonicalizable cae a la forma léxica (lado seguro).
+/// Se aplica IGUAL al destino y a las rutas protegidas, así la comparación queda
+/// consistente por construcción.
 fn resuelve(p: &Path) -> PathBuf {
-    let lex = normaliza(p);
-    if let Ok(real) = std::fs::canonicalize(&lex) {
-        return real; // existe: sigue symlinks de todos los componentes, leaf incluido
-    }
-    // No existe: canonicaliza el ancestro existente más largo y re-anexa el resto.
-    let mut restantes: Vec<std::ffi::OsString> = Vec::new();
-    let mut actual = lex.as_path();
-    while let Some(padre) = actual.parent() {
-        if let Some(nombre) = actual.file_name() {
-            restantes.push(nombre.to_os_string());
-        }
-        if let Ok(real) = std::fs::canonicalize(padre) {
-            let mut out = real;
-            for comp in restantes.iter().rev() {
-                out.push(comp);
+    let mut saltos = 0u32;
+    resolver(p, &mut saltos)
+}
+
+fn resolver(p: &Path, saltos: &mut u32) -> PathBuf {
+    let mut out = PathBuf::new();
+    for comp in p.components() {
+        match comp {
+            Component::Prefix(pre) => out.push(pre.as_os_str()),
+            Component::RootDir => out.push(Component::RootDir.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop(); // `..` sobre lo ya resuelto (semántica del kernel)
             }
-            return out;
+            Component::Normal(nombre) => {
+                out.push(nombre);
+                if *saltos >= MAX_SALTOS {
+                    continue; // tope de saltos: deja el nombre literal y sigue
+                }
+                // ¿`out` es un symlink? `symlink_metadata` NO sigue el enlace, así
+                // que acierta también con uno colgante; `read_link` da su destino.
+                let Ok(md) = std::fs::symlink_metadata(&out) else {
+                    continue; // no existe como symlink → componente literal
+                };
+                if md.file_type().is_symlink() {
+                    if let Ok(destino) = std::fs::read_link(&out) {
+                        *saltos += 1;
+                        out.pop(); // quita el nombre del symlink
+                        out = if destino.is_absolute() {
+                            resolver(&destino, saltos)
+                        } else {
+                            resolver(&out.join(&destino), saltos)
+                        };
+                    }
+                }
+            }
         }
-        actual = padre;
     }
-    lex // llegó a la raíz sin canonicalizar ningún ancestro
+    out
 }
 
 /// ¿Es config de ALTA POTENCIA? (se carga en cada sesión y su corrupción

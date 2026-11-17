@@ -274,7 +274,53 @@ fn main() {
         ) {
             fallos += 1;
         }
-        4
+        // (c) symlink COLGANTE: `colgante`→`.claude/settings.local.json` que NO
+        // existe aún. Un Write lo CREA a través del enlace → envenena config.
+        // canonicalize falla (destino ausente); hay que seguir el symlink igual.
+        let colgante = home.join("colgante");
+        let _ = std::fs::remove_file(&colgante);
+        symlink(home.join(".claude/settings.local.json"), &colgante).unwrap();
+        if !chequear(
+            &dir, &home, "rojo_dangling_leaf_a_settings",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/colgante", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: colgante a destino NEUTRO inexistente → no es config, no avisa.
+        let colg_neutro = home.join("colgante_neutro");
+        let _ = std::fs::remove_file(&colg_neutro);
+        symlink(neutro.join("inexistente.txt"), &colg_neutro).unwrap();
+        if !chequear(
+            &dir, &home, "verde_dangling_leaf_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/colgante_neutro", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        // (d) `..` DESPUÉS de un symlink de directorio: `s_hooks`→`.claude/hooks`,
+        // destino `s_hooks/../CLAUDE.md`. El kernel: hooks→`..`→`.claude`→CLAUDE.md
+        // = config. El colapso léxico de `..` ANTES de resolver lo mandaba a
+        // `~/CLAUDE.md` (diferencial de parser) y se perdía.
+        let s_hooks = home.join("s_hooks");
+        let _ = std::fs::remove_file(&s_hooks);
+        symlink(home.join(".claude/hooks"), &s_hooks).unwrap();
+        if !chequear(
+            &dir, &home, "rojo_dotdot_tras_symlink",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/s_hooks/../CLAUDE.md", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: mismo cruce pero a un nombre NO protegido → `.claude/README.md`.
+        if !chequear(
+            &dir, &home, "verde_dotdot_tras_symlink_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/s_hooks/../README.md", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        8
     };
     #[cfg(not(unix))]
     let casos_symlink = 0;
