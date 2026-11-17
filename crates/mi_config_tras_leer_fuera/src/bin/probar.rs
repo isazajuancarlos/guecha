@@ -216,7 +216,116 @@ fn main() {
         fallos += 1;
     }
 
-    println!("\n15 casos, {fallos} fallos");
+    // ───── #6: evasión por SYMLINK — `atajo`→`.claude` esquivaba la huella ─────
+    // La normalización léxica resolvía `.`/`..` pero NO symlinks; `resuelve`
+    // canonicaliza el padre y lo cierra. Pareja roja/verde por la vía real.
+    #[cfg(unix)]
+    let casos_symlink = {
+        use std::os::unix::fs::symlink;
+        // (a) symlink de DIRECTORIO: `atajo`→`.claude`, destino `atajo/CLAUDE.md`.
+        let atajo = home.join("atajo");
+        let _ = std::fs::remove_file(&atajo);
+        symlink(home.join(".claude"), &atajo).unwrap();
+        if !chequear(
+            &dir, &home, "rojo_symlink_a_claudemd",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/atajo/CLAUDE.md", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: symlink a un directorio NEUTRO (no config) NO debe avisar.
+        let neutro = std::env::temp_dir().join("guardian_neutro");
+        std::fs::create_dir_all(&neutro).unwrap();
+        let otro = home.join("otro");
+        let _ = std::fs::remove_file(&otro);
+        symlink(&neutro, &otro).unwrap();
+        if !chequear(
+            &dir, &home, "verde_symlink_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/otro/CLAUDE.md", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        // (b) symlink del ÚLTIMO componente: `enlace`→`.claude/CLAUDE.md` (el fix
+        // incompleto solo seguía el PADRE; canonicalize de la ruta completa sigue
+        // el leaf). Requiere que el archivo real exista para seguirlo.
+        let config_real = home.join(".claude/CLAUDE.md");
+        std::fs::write(&config_real, "# fixture\n").unwrap();
+        let enlace = home.join("enlace");
+        let _ = std::fs::remove_file(&enlace);
+        symlink(&config_real, &enlace).unwrap();
+        if !chequear(
+            &dir, &home, "rojo_leaf_symlink_a_claudemd",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/enlace", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: leaf symlink a un archivo NEUTRO → no es config, no debe avisar.
+        let archivo_neutro = neutro.join("nota.txt");
+        std::fs::write(&archivo_neutro, "x\n").unwrap();
+        let enlace2 = home.join("enlace_neutro");
+        let _ = std::fs::remove_file(&enlace2);
+        symlink(&archivo_neutro, &enlace2).unwrap();
+        if !chequear(
+            &dir, &home, "verde_leaf_symlink_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/enlace_neutro", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        // (c) symlink COLGANTE: `colgante`→`.claude/settings.local.json` que NO
+        // existe aún. Un Write lo CREA a través del enlace → envenena config.
+        // canonicalize falla (destino ausente); hay que seguir el symlink igual.
+        let colgante = home.join("colgante");
+        let _ = std::fs::remove_file(&colgante);
+        symlink(home.join(".claude/settings.local.json"), &colgante).unwrap();
+        if !chequear(
+            &dir, &home, "rojo_dangling_leaf_a_settings",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/colgante", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: colgante a destino NEUTRO inexistente → no es config, no avisa.
+        let colg_neutro = home.join("colgante_neutro");
+        let _ = std::fs::remove_file(&colg_neutro);
+        symlink(neutro.join("inexistente.txt"), &colg_neutro).unwrap();
+        if !chequear(
+            &dir, &home, "verde_dangling_leaf_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/colgante_neutro", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        // (d) `..` DESPUÉS de un symlink de directorio: `s_hooks`→`.claude/hooks`,
+        // destino `s_hooks/../CLAUDE.md`. El kernel: hooks→`..`→`.claude`→CLAUDE.md
+        // = config. El colapso léxico de `..` ANTES de resolver lo mandaba a
+        // `~/CLAUDE.md` (diferencial de parser) y se perdía.
+        let s_hooks = home.join("s_hooks");
+        let _ = std::fs::remove_file(&s_hooks);
+        symlink(home.join(".claude/hooks"), &s_hooks).unwrap();
+        if !chequear(
+            &dir, &home, "rojo_dotdot_tras_symlink",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/s_hooks/../CLAUDE.md", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: mismo cruce pero a un nombre NO protegido → `.claude/README.md`.
+        if !chequear(
+            &dir, &home, "verde_dotdot_tras_symlink_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/s_hooks/../README.md", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        8
+    };
+    #[cfg(not(unix))]
+    let casos_symlink = 0;
+
+    println!("\n{} casos, {fallos} fallos", 15 + casos_symlink);
     if fallos > 0 {
         std::process::exit(1);
     }

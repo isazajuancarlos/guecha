@@ -38,18 +38,80 @@ fn normaliza(p: &Path) -> PathBuf {
     out
 }
 
+/// Límite de saltos de symlink (el `ELOOP` del kernel Linux es 40): corta un
+/// ciclo `a`→`b`→`a` sin colgarse.
+const MAX_SALTOS: u32 = 40;
+
+/// Resuelve una ruta a la forma real que un Write seguiría, SIN exigir que exista
+/// (el destino se está a punto de crear). Camina los componentes desde la raíz
+/// como el kernel: sigue cada symlink —incluido uno COLGANTE, cuyo destino aún no
+/// existe— y aplica `..` sobre lo YA resuelto, no léxicamente.
+///
+/// Por qué no `canonicalize` ni un colapso léxico de `..` previo: `canonicalize`
+/// exige que la ruta exista (falla con un leaf colgante), y colapsar `..` antes de
+/// seguir symlinks abre un DIFERENCIAL DE PARSER —`enlace/..` NO es `.` si `enlace`
+/// apunta a otro sitio— por el que un write caía en la config real mientras el
+/// guard miraba otra ruta. Los dos huecos los cazó la revisión del commit previo.
+///
+/// Se aplica IGUAL al destino y a las rutas protegidas, así la comparación queda
+/// consistente por construcción.
+fn resuelve(p: &Path) -> PathBuf {
+    let mut saltos = 0u32;
+    resolver(p, &mut saltos)
+}
+
+fn resolver(p: &Path, saltos: &mut u32) -> PathBuf {
+    let mut out = PathBuf::new();
+    for comp in p.components() {
+        match comp {
+            Component::Prefix(pre) => out.push(pre.as_os_str()),
+            Component::RootDir => out.push(Component::RootDir.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop(); // `..` sobre lo ya resuelto (semántica del kernel)
+            }
+            Component::Normal(nombre) => {
+                out.push(nombre);
+                if *saltos >= MAX_SALTOS {
+                    continue; // tope de saltos: deja el nombre literal y sigue
+                }
+                // ¿`out` es un symlink? `symlink_metadata` NO sigue el enlace, así
+                // que acierta también con uno colgante; `read_link` da su destino.
+                let Ok(md) = std::fs::symlink_metadata(&out) else {
+                    continue; // no existe como symlink → componente literal
+                };
+                if md.file_type().is_symlink() {
+                    if let Ok(destino) = std::fs::read_link(&out) {
+                        *saltos += 1;
+                        out.pop(); // quita el nombre del symlink
+                        out = if destino.is_absolute() {
+                            resolver(&destino, saltos)
+                        } else {
+                            resolver(&out.join(&destino), saltos)
+                        };
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
 /// ¿Es config de ALTA POTENCIA? (se carga en cada sesión y su corrupción
 /// persiste). Las memorias quedan FUERA del v1 a propósito: se escriben a
 /// diario y su radio por archivo es menor (regla estrecha).
 pub fn es_config_protegida(ruta: &Path, home: &Path) -> bool {
-    let r = normaliza(ruta);
-    let base = home.join(".claude");
+    let r = resuelve(ruta);
+    // `base` y cada ruta protegida pasan por el MISMO `resuelve` que el destino,
+    // así ambos lados se comparan en su forma real (sigue un `.claude`/`hooks`
+    // enlazado, un `/var`→`/private/var`, etc.). Consistente por construcción.
+    let base = resuelve(&home.join(".claude"));
     for archivo in ["CLAUDE.md", "settings.json", "settings.local.json"] {
-        if r == base.join(archivo) {
+        if r == resuelve(&base.join(archivo)) {
             return true;
         }
     }
-    r.starts_with(base.join("hooks"))
+    r.starts_with(resuelve(&base.join("hooks")))
 }
 
 /// ¿Esta entrada del transcript es un turno HUMANO genuino (lo que el usuario
