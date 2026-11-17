@@ -38,23 +38,41 @@ fn normaliza(p: &Path) -> PathBuf {
     out
 }
 
-/// Resuelve symlinks ADEMÁS de `.`/`..`. El archivo destino puede no existir aún
-/// (se está a punto de escribir), así que `canonicalize` sobre él fallaría; se
-/// canonicaliza el PADRE —que casi siempre existe— y se re-anexa el nombre. Sin
-/// padre canonicalizable cae a la normalización léxica (lado seguro, idéntico al
-/// comportamiento anterior). Cierra la evasión por symlink: escribir a
-/// `~/atajo/CLAUDE.md` con `atajo`→`.claude` ya no esquiva la huella de persistencia.
+/// Resuelve una ruta a su forma REAL para comparar: sigue los symlinks que un
+/// Write seguiría de verdad. El destino puede no existir aún (se está a punto de
+/// crear), así que no se puede canonicalizar siempre.
+///
+/// Si la ruta COMPLETA existe, `canonicalize` sigue los symlinks de todos los
+/// componentes, el ÚLTIMO incluido (`~/enlace`→`~/.claude/CLAUDE.md`). Si no
+/// existe, se sube al ancestro existente más largo, se canonicaliza ÉSE y se
+/// re-anexan los componentes restantes (ya sin `.`/`..`).
+///
+/// La clave es que se aplica IGUAL al destino y a las rutas protegidas, así la
+/// comparación es consistente por construcción: no hay un lado canónico y otro
+/// léxico (la causa de los tres hallazgos de la revisión). Sin ningún ancestro
+/// canonicalizable cae a la forma léxica (lado seguro).
 fn resuelve(p: &Path) -> PathBuf {
     let lex = normaliza(p);
-    match (lex.parent(), lex.file_name()) {
-        (Some(padre), Some(nombre)) if !padre.as_os_str().is_empty() => {
-            match std::fs::canonicalize(padre) {
-                Ok(real) => real.join(nombre),
-                Err(_) => lex,
-            }
-        }
-        _ => lex,
+    if let Ok(real) = std::fs::canonicalize(&lex) {
+        return real; // existe: sigue symlinks de todos los componentes, leaf incluido
     }
+    // No existe: canonicaliza el ancestro existente más largo y re-anexa el resto.
+    let mut restantes: Vec<std::ffi::OsString> = Vec::new();
+    let mut actual = lex.as_path();
+    while let Some(padre) = actual.parent() {
+        if let Some(nombre) = actual.file_name() {
+            restantes.push(nombre.to_os_string());
+        }
+        if let Ok(real) = std::fs::canonicalize(padre) {
+            let mut out = real;
+            for comp in restantes.iter().rev() {
+                out.push(comp);
+            }
+            return out;
+        }
+        actual = padre;
+    }
+    lex // llegó a la raíz sin canonicalizar ningún ancestro
 }
 
 /// ¿Es config de ALTA POTENCIA? (se carga en cada sesión y su corrupción
@@ -62,16 +80,16 @@ fn resuelve(p: &Path) -> PathBuf {
 /// diario y su radio por archivo es menor (regla estrecha).
 pub fn es_config_protegida(ruta: &Path, home: &Path) -> bool {
     let r = resuelve(ruta);
-    // La base se canonicaliza también, para comparar la misma forma real en ambos
-    // lados (p. ej. `/var`→`/private/var`, o un `.claude` tras un home enlazado).
-    let base =
-        std::fs::canonicalize(home.join(".claude")).unwrap_or_else(|_| normaliza(&home.join(".claude")));
+    // `base` y cada ruta protegida pasan por el MISMO `resuelve` que el destino,
+    // así ambos lados se comparan en su forma real (sigue un `.claude`/`hooks`
+    // enlazado, un `/var`→`/private/var`, etc.). Consistente por construcción.
+    let base = resuelve(&home.join(".claude"));
     for archivo in ["CLAUDE.md", "settings.json", "settings.local.json"] {
-        if r == base.join(archivo) {
+        if r == resuelve(&base.join(archivo)) {
             return true;
         }
     }
-    r.starts_with(base.join("hooks"))
+    r.starts_with(resuelve(&base.join("hooks")))
 }
 
 /// ¿Esta entrada del transcript es un turno HUMANO genuino (lo que el usuario

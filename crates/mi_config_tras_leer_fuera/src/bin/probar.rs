@@ -222,10 +222,10 @@ fn main() {
     #[cfg(unix)]
     let casos_symlink = {
         use std::os::unix::fs::symlink;
+        // (a) symlink de DIRECTORIO: `atajo`→`.claude`, destino `atajo/CLAUDE.md`.
         let atajo = home.join("atajo");
         let _ = std::fs::remove_file(&atajo);
         symlink(home.join(".claude"), &atajo).unwrap();
-        // ROJO: `{HOME}/atajo/CLAUDE.md` (symlink a .claude) DEBE avisar.
         if !chequear(
             &dir, &home, "rojo_symlink_a_claudemd",
             vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
@@ -246,7 +246,35 @@ fn main() {
         ) {
             fallos += 1;
         }
-        2
+        // (b) symlink del ÚLTIMO componente: `enlace`→`.claude/CLAUDE.md` (el fix
+        // incompleto solo seguía el PADRE; canonicalize de la ruta completa sigue
+        // el leaf). Requiere que el archivo real exista para seguirlo.
+        let config_real = home.join(".claude/CLAUDE.md");
+        std::fs::write(&config_real, "# fixture\n").unwrap();
+        let enlace = home.join("enlace");
+        let _ = std::fs::remove_file(&enlace);
+        symlink(&config_real, &enlace).unwrap();
+        if !chequear(
+            &dir, &home, "rojo_leaf_symlink_a_claudemd",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/enlace", home.display()), true,
+        ) {
+            fallos += 1;
+        }
+        // VERDE: leaf symlink a un archivo NEUTRO → no es config, no debe avisar.
+        let archivo_neutro = neutro.join("nota.txt");
+        std::fs::write(&archivo_neutro, "x\n").unwrap();
+        let enlace2 = home.join("enlace_neutro");
+        let _ = std::fs::remove_file(&enlace2);
+        symlink(&archivo_neutro, &enlace2).unwrap();
+        if !chequear(
+            &dir, &home, "verde_leaf_symlink_neutro",
+            vec![humano("investiga en la web"), usa("WebFetch", json!({"url":"http://x"}))],
+            &format!("{}/enlace_neutro", home.display()), false,
+        ) {
+            fallos += 1;
+        }
+        4
     };
     #[cfg(not(unix))]
     let casos_symlink = 0;
